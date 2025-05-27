@@ -18,6 +18,7 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Paths;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -127,6 +128,16 @@ public class NarthellaSetvice {
         headerCell2.setCellValue("Correctly extracted?");
         Cell headerCell3 = headerRow.createCell(columnindex.getAndIncrement());
         headerCell3.setCellValue("Notes");
+        Map<String,Object> unmatchedKeys=new HashMap<>();
+        unmatchedKeys.put("Colour notes","print:hasColourDetails");
+        unmatchedKeys.put("Type of proof","print:hasProofType");
+        unmatchedKeys.put("Have we specified FSC paper","print:hasFscPaperBeenSpecified");
+        unmatchedKeys.put("Total number of colours","print:hasTotalColours");
+        unmatchedKeys.put("Total finished quantity","print:hasFinishedQuantity");
+        unmatchedKeys.put("Send to / additional details","print:hasSendToDetails");
+        unmatchedKeys.put("Have we offered recycled content?","print:hasRecycledContentBeenOffered");
+        unmatchedKeys.put("Colours to face and reverse are the same","print:coloursToFaceAndReverseAreSame");
+        unmatchedKeys.put("Is artwork double sided different or same?","print:hasArtworkDoubleSidedStatus");
         raw.entrySet().stream().forEach(i -> {
             AtomicInteger columnindex1 = new AtomicInteger(0);
             //headerCell.setCellValue(i.getKey());
@@ -172,44 +183,35 @@ public class NarthellaSetvice {
                         }
                     }
                 }
-                if(i.getKey().equalsIgnoreCase("Colour notes") && current.getKey().equalsIgnoreCase("print:hasColourDetails")){
-                    if(i.getValue().toString().equalsIgnoreCase(current.getValue().toString())) cellValue="Y";
-                    else cellValue="N";
+                else{
+                    String unmatchedVal=unmatchedKeys.get(i.getKey()) !=null?unmatchedKeys.get(i.getKey()).toString():"";
+                    if( !unmatchedVal.isEmpty()){
+                        if (con.getFirst().get(unmatchedVal).getClass().getSimpleName().equalsIgnoreCase("LinkedHashMap")) {
+                            Map<String, Object> mapVal = (Map<String, Object>) con.getFirst().get(unmatchedVal);
+                            if (mapVal.get("@value") != null) {
+                                System.out.println("obj == " + unmatchedVal);
+                                System.out.println(" raw string " + i.getValue().toString());
+                                System.out.println(" converted Value" + mapVal.get("@value").toString());
+                                if (mapVal.get("@value").toString().equalsIgnoreCase(i.getValue().toString())) {
+                                    cellValue="Y";
+                                } else {
+                                    cellValue="N";
+                                }
+                            }
+                        }
+                        else {
+                            System.out.println("String == " + unmatchedVal);
+                            System.out.println(" raw string " + i.getValue().toString());
+                            System.out.println(" converted string " + con.getFirst().get(unmatchedVal));
+                            if (Objects.equals(con.getFirst().get(unmatchedVal).toString(), i.getValue().toString())) {
+                                cellValue="Y";
+                            } else {
+                                cellValue="N";
+                            }
+                        }
+                    }
                 }
-                if(i.getKey().equalsIgnoreCase("Type of proof") && current.getKey().equalsIgnoreCase("print:hasProofType")){
-                    if(i.getValue().toString().equalsIgnoreCase(current.getValue().toString())) cellValue="Y";
-                    else cellValue="N";
-                }
-                if(i.getKey().equalsIgnoreCase("Have we specified FSC paper") && current.getKey().equalsIgnoreCase("print:hasFscPaperBeenSpecified")){
-                    if(i.getValue().toString().equalsIgnoreCase(current.getValue().toString())) cellValue="Y";
-                    else cellValue="N";
-                }
-                if(i.getKey().equalsIgnoreCase("Total number of colours") && current.getKey().equalsIgnoreCase("print:hasTotalColours")){
-                    Map<String, Object> mapVal = (Map<String, Object>) current.getValue();
-                    if(i.getValue().toString().equalsIgnoreCase(mapVal.get("@value").toString())) cellValue="Y";
-                    else cellValue="N";
-                }
-                if(i.getKey().equalsIgnoreCase("Total finished quantity") && current.getKey().equalsIgnoreCase("print:hasFinishedQuantity")){
-                    Map<String, Object> mapVal = (Map<String, Object>) current.getValue();
-                    if(i.getValue().toString().equalsIgnoreCase(mapVal.get("@value").toString())) cellValue="Y";
-                    else cellValue="N";
-                }
-                if(i.getKey().equalsIgnoreCase("Send to / additional details") && current.getKey().equalsIgnoreCase("print:hasSendToDetails")){
-                    if(i.getValue().toString().equalsIgnoreCase(current.getValue().toString())) cellValue="Y";
-                    else cellValue="N";
-                }
-                if(i.getKey().equalsIgnoreCase("Have we offered recycled content?") && current.getKey().equalsIgnoreCase("print:hasRecycledContentBeenOffered")){
-                    if(i.getValue().toString().equalsIgnoreCase(current.getValue().toString())) cellValue="Y";
-                    else cellValue="N";
-                }
-                if(i.getKey().equalsIgnoreCase("Colours to face and reverse are the same") && current.getKey().equalsIgnoreCase("print:coloursToFaceAndReverseAreSame")){
-                    if(i.getValue().toString().equalsIgnoreCase(current.getValue().toString())) cellValue="Y";
-                    else cellValue="N";
-                }
-                if(i.getKey().equalsIgnoreCase("Is artwork double sided different or same?") && current.getKey().equalsIgnoreCase("print:hasArtworkDoubleSidedStatus")){
-                    if(i.getValue().toString().equalsIgnoreCase(current.getValue().toString())) cellValue="Y";
-                    else cellValue="N";
-                }
+
             }
             Cell valueCell3 = valueRow.createCell(columnindex1.getAndIncrement());
             valueCell3.setCellValue(cellValue);
