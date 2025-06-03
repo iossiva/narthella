@@ -1,7 +1,13 @@
 package com.example.narthella.Service;
 
 import com.example.narthella.DAO.NorthellaRepository;
+import com.example.narthella.Model.ConvertedDTO;
+import com.example.narthella.Model.RawDTO;
 import com.example.narthella.Model.RawOrderLine;
+import com.fasterxml.jackson.core.JsonParser;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.util.JSONPObject;
 import lombok.AllArgsConstructor;
 import lombok.extern.log4j.Log4j;
 import lombok.extern.slf4j.Slf4j;
@@ -13,16 +19,15 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.io.FileNotFoundException;
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.io.InputStream;
+import java.io.*;
+import java.lang.reflect.Type;
+import com.google.gson.Gson;
+import com.google.gson.reflect.TypeToken;
+import java.lang.reflect.Type;
 import java.nio.file.Paths;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
+import java.util.*;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 @Service
@@ -41,36 +46,68 @@ public class NarthellaSetvice {
             throw new Exception("Please upload a valid Excel file.");
         }
 
-        try (InputStream inputStream = file.getInputStream()) {
-            Workbook workbook = WorkbookFactory.create(inputStream);
-            Sheet sheet = workbook.getSheetAt(0); // Read the first sheet
+        List<UUID> dataList = new ArrayList<>();
 
-            for (Row row : sheet) {
-                for (Cell cell : row) {
-                    switch (cell.getCellType()) {
-                        case STRING:
-                            System.out.print(cell.getStringCellValue() + "\t");
-                            break;
-                        case NUMERIC:
-                            System.out.print(cell.getNumericCellValue() + "\t");
-                            break;
-                        default:
-                            System.out.print("UNKNOWN\t");
-                    }
+        Workbook workbook = WorkbookFactory.create(file.getInputStream());
+        Sheet sheet = workbook.getSheetAt(0); // read first sheet
+
+        for (Row row : sheet) {
+            for (Cell cell : row) {
+                switch (cell.getCellType()) {
+                    case STRING:
+                        dataList.add(UUID.fromString(cell.getStringCellValue().toString()));
+                        break;
+                    case NUMERIC:
+                        dataList.add(UUID.fromString(String.valueOf(cell.getNumericCellValue())));
+                        break;
+                    default:
+                        dataList.add(UUID.fromString("UNKNOWN"));
                 }
-                System.out.println();
             }
-
-            workbook.close();
-            return "File processed successfully";
-        } catch (Exception e) {
-            throw new Exception("Failed to process Excel file: " + e.getMessage());
         }
+
+        workbook.close();
+        System.out.println(dataList);
+        List<Map<String, Map<String, Object>>> raw=new ArrayList<>();
+        List<Map<String, Map<String, Object>>> converted=new ArrayList<>();
+        raw=northellaRepository.getRawJson(dataList);
+        converted=northellaRepository.getConvertedJson(dataList);
+        String directoryPath = "D:\\Northella";
+        Workbook workbookwrte = new XSSFWorkbook();
+        String fileName = "northellaOrderLine.xlsx";
+         for(int i=0;i<raw.size();i++){
+            RawOrderLine combinedJson=new RawOrderLine();
+            Gson gson = new Gson();
+            Type type = new TypeToken<Map<String, Object>>() {}.getType();
+            Map<String, Object> rawMap = gson.fromJson(String.valueOf(raw.get(i).get("raw")), type);
+            Map<String, Object> convertMap = gson.fromJson(String.valueOf(converted.get(i).get("converted")), type);
+            System.out.println(rawMap);
+            combinedJson.setRaw(rawMap);
+            combinedJson.setConverted(convertMap);
+            Sheet sheetWrte = workbookwrte.createSheet("Sheet"+i);
+            workbookwrte=  this.northellaJsonCompare(combinedJson,workbookwrte,sheetWrte);
+        }
+        // Define the full path to save the file
+        String filePath = Paths.get(directoryPath, fileName).toString();
+
+        try (FileOutputStream fileOut = new FileOutputStream(filePath)) {
+            workbookwrte.write(fileOut);
+            System.out.println("Excel file created successfully at: " + filePath);
+        } catch (IOException e) {
+            e.printStackTrace();
+        } finally {
+            try {
+                workbook.close();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+        return "workbook read sucessfully";
     }
 
-    public Map<String, Object> getNorthellaJson() {
+    /*public Map<String, Object> getNorthellaJson() {
         return northellaRepository.getNorthellaJson();
-    }
+    }*/
 
     public void generateExcelFile(String[] header, String[] values) {
         String fileName = "northellaOrderLine1";
@@ -109,13 +146,10 @@ public class NarthellaSetvice {
         }
     }
 
-    public String northellaJsonCompare(RawOrderLine request) {
+    public Workbook northellaJsonCompare(RawOrderLine request,Workbook workbook,Sheet sheet) {
+        System.out.println("sheet== ");
         Map<String, Object> raw = request.getRaw();
         Map<String, Object> converted = request.getConverted();
-        String directoryPath = "D:\\Northella";
-        Workbook workbook = new XSSFWorkbook();
-        Sheet sheet = workbook.createSheet("Sample Sheet");
-        String fileName = "northellaOrderLine.xlsx";
         AtomicInteger columnindex = new AtomicInteger(0);
         AtomicInteger rowIndex = new AtomicInteger(0);
         // Create header row
@@ -136,77 +170,75 @@ public class NarthellaSetvice {
         unmatchedKeys.put("Total finished quantity","print:hasFinishedQuantity");
         unmatchedKeys.put("Send to / additional details","print:hasSendToDetails");
         unmatchedKeys.put("Have we offered recycled content?","print:hasRecycledContentBeenOffered");
-        unmatchedKeys.put("Colours to face and reverse are the same","print:coloursToFaceAndReverseAreSame");
+        unmatchedKeys.put("Colours to face and reverse are the same","print:hasColoursToFaceAndReverseAreSame");
         unmatchedKeys.put("Is artwork double sided different or same?","print:hasArtworkDoubleSidedStatus");
-        raw.entrySet().stream().forEach(i -> {
+        unmatchedKeys.put("Coatings / sealer","print:hasCoatingOrSealer");
+        raw.forEach((key, value) -> {
             AtomicInteger columnindex1 = new AtomicInteger(0);
             //headerCell.setCellValue(i.getKey());
             Row valueRow = sheet.createRow(rowIndex.getAndIncrement());
             Cell valueCell = valueRow.createCell(columnindex1.getAndIncrement());
             valueCell.setCellValue(raw.get("Permutation ID").toString());
             Cell valueCell2 = valueRow.createCell(columnindex1.getAndIncrement());
-            valueCell2.setCellValue(i.getKey());
+            valueCell2.setCellValue(key);
             // create a value cell
-            String convertedCol = "has" + CaseUtils.toCamelCase(i.getKey().replaceAll("\\s+", "_"), true, '_');
+            String convertedCol = "has" + CaseUtils.toCamelCase(key.replaceAll("\\s+", "_"), true, '_');
             System.out.println("convertedCol=== " + convertedCol);
             List<Map<String, Object>> con = (List<Map<String, Object>>) converted.get("@graph");
             var iteratorcon = con.getFirst().entrySet().stream().iterator();
-            String cellValue="N";
+            String cellValue = "N";
             //log.info("con.getFirst()  {}",con.getFirst());
             while (iteratorcon.hasNext()) {
                 var current = iteratorcon.next();
                 if (current.getKey().toLowerCase().endsWith(convertedCol.toLowerCase())) {
                     System.out.println("current.getValue().getClass().getSimpleName() " + current.getValue().getClass().getSimpleName());
-                    if (current.getValue().getClass().getSimpleName().equalsIgnoreCase("LinkedHashMap")) {
+                    if (current.getValue().getClass().getSimpleName().endsWith("Map")) {
                         Map<String, Object> mapVal = (Map<String, Object>) current.getValue();
                         if (mapVal.get("@value") != null) {
                             System.out.println("obj == " + current.getKey());
-                            System.out.println(" raw string " + i.getValue().toString());
+                            System.out.println(" raw string " + value.toString());
                             System.out.println(" converted Value" + mapVal.get("@value").toString());
-                            if (mapVal.get("@value").toString().equalsIgnoreCase(i.getValue().toString())) {
-                                cellValue="Y";
+                            if (mapVal.get("@value").toString().equalsIgnoreCase(value.toString())) {
+                                cellValue = "Y";
                             } else {
-                                cellValue="N";
+                                cellValue = "N";
                             }
                         }
-                    }
-                    else {
+                    } else {
                         //(!current.getValue().getClass().getSimpleName().equalsIgnoreCase("LinkedHashMap")) {
                         System.out.println("obj == " + current.getKey());
                         System.out.println("String == " + current.getKey());
-                        System.out.println(" raw string " + i.getValue().toString());
+                        System.out.println(" raw string " + value.toString());
                         System.out.println(" converted string " + current.getValue());
-                        if (Objects.equals(current.getValue().toString(), i.getValue().toString())) {
-                            cellValue="Y";
+                        if (Objects.equals(current.getValue().toString(), value.toString())) {
+                            cellValue = "Y";
                         } else {
-                            cellValue="N";
+                            cellValue = "N";
                         }
                     }
-                }
-                else{
-                    String unmatchedVal=unmatchedKeys.get(i.getKey()) !=null?unmatchedKeys.get(i.getKey()).toString():"";
-                    if( !unmatchedVal.isEmpty()){
-                        if (con.getFirst().get(unmatchedVal).getClass().getSimpleName().equalsIgnoreCase("LinkedHashMap")) {
+                } else {
+                    String unmatchedVal = unmatchedKeys.get(key) != null ? unmatchedKeys.get(key).toString() : "";
+                    if (!unmatchedVal.isEmpty() && con.getFirst().get(unmatchedVal) !=null) {
+                        if (con.getFirst().get(unmatchedVal).getClass().getSimpleName().endsWith("Map")) {
                             Map<String, Object> mapVal = (Map<String, Object>) con.getFirst().get(unmatchedVal);
                             if (mapVal.get("@value") != null) {
                                 System.out.println("obj == " + unmatchedVal);
-                                System.out.println(" raw string " + i.getValue().toString());
+                                System.out.println(" raw string " + value.toString());
                                 System.out.println(" converted Value" + mapVal.get("@value").toString());
-                                if (mapVal.get("@value").toString().equalsIgnoreCase(i.getValue().toString())) {
-                                    cellValue="Y";
+                                if (mapVal.get("@value").toString().equalsIgnoreCase(value.toString())) {
+                                    cellValue = "Y";
                                 } else {
-                                    cellValue="N";
+                                    cellValue = "N";
                                 }
                             }
-                        }
-                        else {
+                        } else {
                             System.out.println("String == " + unmatchedVal);
-                            System.out.println(" raw string " + i.getValue().toString());
+                            System.out.println(" raw string " + value.toString());
                             System.out.println(" converted string " + con.getFirst().get(unmatchedVal));
-                            if (Objects.equals(con.getFirst().get(unmatchedVal).toString(), i.getValue().toString())) {
-                                cellValue="Y";
+                            if (Objects.equals(con.getFirst().get(unmatchedVal).toString(), value.toString())) {
+                                cellValue = "Y";
                             } else {
-                                cellValue="N";
+                                cellValue = "N";
                             }
                         }
                     }
@@ -216,24 +248,10 @@ public class NarthellaSetvice {
             Cell valueCell3 = valueRow.createCell(columnindex1.getAndIncrement());
             valueCell3.setCellValue(cellValue);
             Cell valueCell4 = valueRow.createCell(columnindex1.getAndIncrement());
-            valueCell4.setCellValue(cellValue.equalsIgnoreCase("N")?"Identified as failed":"");
+            valueCell4.setCellValue(cellValue.equalsIgnoreCase("N") ? "Identified as failed" : "");
         });
-        // Define the full path to save the file
-        String filePath = Paths.get(directoryPath, fileName).toString();
 
-        try (FileOutputStream fileOut = new FileOutputStream(filePath)) {
-            workbook.write(fileOut);
-            System.out.println("Excel file created successfully at: " + filePath);
-        } catch (IOException e) {
-            e.printStackTrace();
-        } finally {
-            try {
-                workbook.close();
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-        }
-        return "compared successfully";
+        return workbook;
     }
 
 

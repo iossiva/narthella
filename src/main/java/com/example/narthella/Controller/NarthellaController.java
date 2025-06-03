@@ -46,14 +46,14 @@ public class NarthellaController {
         }
     }
 
-    @GetMapping("/getJson")
+  /*  @GetMapping("/getJson")
     public Map<String,Object> getNorthellaJson(){
         return narthellaSetvice.getNorthellaJson();
     }
-
-    @PostMapping("/compare/raw")
+*/
+   /* @PostMapping("/compare/raw")
     public String northellaJsonCompare(@Validated @RequestBody RawOrderLine rawOrderLine){
 
         return narthellaSetvice.northellaJsonCompare(rawOrderLine);
-    }
+    }*/
 }
