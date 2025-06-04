@@ -16,8 +16,8 @@ import java.util.UUID;
 public interface NorthellaRepository extends CrudRepository<Dummy,Integer> {
 
     @Query(nativeQuery = true)
-    List<Map<String,Map<String,Object>>> getRawJson(@Param("permutationIds") List<UUID> permutationIds);
+    List<Map<String,Object>> getRawJson(@Param("permutationIds") List<UUID> permutationIds);
 
     @Query(nativeQuery = true)
-    List<Map<String,Map<String,Object>>> getConvertedJson(@Param("permutationIds") List<UUID> permutationIds);
+    List<Map<String,Object>> getConvertedJson(@Param("permutationIds") List<UUID> permutationIds);
 }

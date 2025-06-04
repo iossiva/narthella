@@ -68,23 +68,27 @@ public class NarthellaSetvice {
 
         workbook.close();
         System.out.println(dataList);
-        List<Map<String, Map<String, Object>>> raw=new ArrayList<>();
-        List<Map<String, Map<String, Object>>> converted=new ArrayList<>();
+        List<Map<String, Object>> raw=new ArrayList<>();
+        List<Map<String, Object>> converted=new ArrayList<>();
         raw=northellaRepository.getRawJson(dataList);
         converted=northellaRepository.getConvertedJson(dataList);
         String directoryPath = "D:\\Northella";
         Workbook workbookwrte = new XSSFWorkbook();
         String fileName = "northellaOrderLine.xlsx";
          for(int i=0;i<raw.size();i++){
+             String permutationId=raw.get(i).get("permutationId").toString();
+             System.out.println("permutationId = "+permutationId);
             RawOrderLine combinedJson=new RawOrderLine();
             Gson gson = new Gson();
             Type type = new TypeToken<Map<String, Object>>() {}.getType();
             Map<String, Object> rawMap = gson.fromJson(String.valueOf(raw.get(i).get("raw")), type);
-            Map<String, Object> convertMap = gson.fromJson(String.valueOf(converted.get(i).get("converted")), type);
+            var filterCovertedMap=converted.stream().filter(n->n.get("permutationId").toString().equalsIgnoreCase(permutationId)).toList();
+            Map<String, Object> convertMap = gson.fromJson(String.valueOf(filterCovertedMap.getFirst().get("converted")), type);
             System.out.println(rawMap);
+             System.out.println(convertMap);
             combinedJson.setRaw(rawMap);
             combinedJson.setConverted(convertMap);
-            Sheet sheetWrte = workbookwrte.createSheet("Sheet"+i);
+            Sheet sheetWrte = workbookwrte.createSheet("Sheet "+i);
             workbookwrte=  this.northellaJsonCompare(combinedJson,workbookwrte,sheetWrte);
         }
         // Define the full path to save the file
